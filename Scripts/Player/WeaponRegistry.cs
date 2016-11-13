@@ -4,6 +4,7 @@ using System.Collections;
 [System.Serializable]
 public struct WeaponItem {
     public string weaponId;
+    public WeaponCategory weaponCategory;
     public GameObject template;
     public float roundsPerMinute;
     public int animationIndex;
@@ -15,6 +16,22 @@ public struct WeaponSfx {
     public string sfxId;
     public float volume;
     public AudioClip sfx;
+}
+
+public enum WeaponCategory
+{
+    NoWeapon = 0,
+    Pistol,
+    AssultRifle01,
+    AssultRifle02,
+    Shotgun,
+    SniperRifle,
+    Rifle,
+    SubMachineGun,
+    RPG,
+    MiniGun,
+    Grenades,
+    Melee
 }
 
 public class WeaponRegistry : MonoBehaviour {
