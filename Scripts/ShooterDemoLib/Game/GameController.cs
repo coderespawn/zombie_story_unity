@@ -40,7 +40,7 @@ namespace ZombieStory
             backgroundMusic = GetComponent<AudioSource>();
 
             CreateNewLevel();
-            gameSoundVolume.Init(0, 1, 2, TweenMode.EaseIn);
+            gameSoundVolume.Init(0, .8f, 2, TweenMode.EaseIn);
         }
 
         void Update()

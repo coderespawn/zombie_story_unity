@@ -10,11 +10,12 @@ namespace ZombieStory
         public int damagePerShot = 20;                  // The damage inflicted by each bullet.
         public float timeBetweenBullets = 0.15f;        // The time between each shot.
         public float range = 100f;                      // The distance the gun can fire.
-
+        public GameObject gunBarrel;
+        
         public event OnShootingStarted ShootingStarted;
         public event OnShootingStopped ShootingStopped;
 
-        float timeSinceLastShot;                                    // A timer to determine when to fire.
+        float timeSinceLastShot = 100;                                    // A timer to determine when to fire.
         public float TimeSinceLastShot
         {
             get { return timeSinceLastShot; }
@@ -26,24 +27,25 @@ namespace ZombieStory
         }
 
         public Ray shootRay;                                   // A ray from the gun end forwards.
-        public Light faceLight;								// Duh
+        //public Light faceLight;								// Duh
 
         RaycastHit shootHit;                            // A raycast hit to get information about what was hit.
         ParticleSystem gunParticles;                    // Reference to the particle system.
         LineRenderer gunLine;                           // Reference to the line renderer.
-        AudioSource gunAudio;                           // Reference to the audio source.
         Light gunLight;                                 // Reference to the light component.
+        SfxPlayer sfxPlayer;
+        WeaponSfx weaponSfx;
         float effectsDisplayTime = 0.2f;                // The proportion of the timeBetweenBullets that the effects will display for.
         bool shooting = false;
 
         void Awake ()
         {
             // Set up the references.
-            gunParticles = GetComponent<ParticleSystem> ();
-            gunLine = GetComponent <LineRenderer> ();
-            gunAudio = GetComponent<AudioSource> ();
-            gunLight = GetComponent<Light> ();
-			//faceLight = GetComponentInChildren<Light> ();
+            gunParticles = gunBarrel.GetComponent<ParticleSystem> ();
+            gunLine = gunBarrel.GetComponent <LineRenderer> ();
+            gunLight = gunBarrel.GetComponent<Light> ();
+            //faceLight = GetComponentInChildren<Light> ();
+            sfxPlayer = GetComponent<SfxPlayer>();
         }
 
 
@@ -84,12 +86,18 @@ namespace ZombieStory
             }
         }
 
+        public void OnWeaponChanged(WeaponItem weapon, WeaponSfx weaponSfx)
+        {
+            this.weaponSfx = weaponSfx;
+            gunBarrel.transform.localPosition = weapon.barrelOffset;
+            timeBetweenBullets = 1.0f / weapon.roundsPerSecond;
+        }
 
         public void DisableEffects ()
         {
             // Disable the line renderer and the light.
             gunLine.enabled = false;
-			faceLight.enabled = false;
+			//faceLight.enabled = false;
             gunLight.enabled = false;
         }
 
@@ -99,12 +107,11 @@ namespace ZombieStory
             // Reset the timer.
             timeSinceLastShot = 0f;
 
-            // Play the gun shot audioclip.
-            gunAudio.Play ();
+            sfxPlayer.PlayAudio(weaponSfx.sfx, weaponSfx.volume);
 
             // Enable the lights.
             gunLight.enabled = true;
-			faceLight.enabled = true;
+			//faceLight.enabled = true;
 
             // Stop the particles from playing if they were, then start the particles.
             gunParticles.Stop ();
@@ -112,11 +119,11 @@ namespace ZombieStory
 
             // Enable the line renderer and set it's first position to be the end of the gun.
             gunLine.enabled = true;
-            gunLine.SetPosition (0, transform.position);
+            gunLine.SetPosition (0, gunBarrel.transform.position);
 
             // Set the shootRay so that it starts at the end of the gun and points forward from the barrel.
-            shootRay.origin = transform.position;
-            shootRay.direction = transform.forward;
+            shootRay.origin = gunBarrel.transform.position;
+            shootRay.direction = gunBarrel.transform.forward;
 
             // Perform the raycast against gameobjects on the shootable layer and if it hits something...
             if(Physics.Raycast (shootRay, out shootHit, range))

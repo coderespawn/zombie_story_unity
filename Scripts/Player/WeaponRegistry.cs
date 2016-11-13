@@ -6,7 +6,9 @@ public struct WeaponItem {
     public string weaponId;
     public WeaponCategory weaponCategory;
     public GameObject template;
-    public float roundsPerMinute;
+    public Vector3 barrelOffset;
+    public float roundsPerSecond;
+    public bool fullAuto;
     public int animationIndex;
     public string sfxName;
 }
@@ -47,6 +49,16 @@ public class WeaponRegistry : MonoBehaviour {
             }
         }
         return new WeaponItem();
+    }
+
+    public WeaponItem GetNextWeapon(WeaponItem currentItem)
+    {
+        int index = System.Array.FindIndex<WeaponItem>(weapons, p => p.weaponId == currentItem.weaponId);
+        if (index == -1) {
+            return currentItem;
+        }
+        int nextIndex = (index + 1) % weapons.Length;
+        return weapons[nextIndex];
     }
 
     public WeaponSfx GetWeaponSfx(string sfxId) {

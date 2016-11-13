@@ -19,4 +19,21 @@ public class GameUtils {
         audioObject.AddComponent<DestroyOnAudioComplete>();
     }
 
+
+    public static GameObject GetNearestObjectWithTag(Vector3 position, string tag)
+    {
+        var vehicles = GameObject.FindGameObjectsWithTag(tag);
+        float nearestDistanceSq = float.MaxValue;
+        GameObject nearestVehicle = null;
+        foreach (var vehicle in vehicles)
+        {
+            var distanceSq = (vehicle.transform.position - position).sqrMagnitude;
+            if (distanceSq < nearestDistanceSq)
+            {
+                nearestDistanceSq = distanceSq;
+                nearestVehicle = vehicle;
+            }
+        }
+        return nearestVehicle;
+    }
 }

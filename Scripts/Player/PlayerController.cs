@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
-
+using UnityStandardAssets.Vehicles.Car;
 
 namespace ZombieStory
 {
@@ -11,25 +11,38 @@ namespace ZombieStory
         public WeaponRegistry weaponRegistry;
         public float timeToHoster = 2;
         public float headTiltTime = 0.2f;
-        
+        public float maxVehicleMountDistance = 2.0f;
+        public GameObject playerPawn;
+        public CameraFollow cameraFollow;
+
         PlayerShooting shooting;
         CharacterController character;
         WeaponItem currentWeapon;
         Animator anim;
-        public bool weaponAiming = false;
+        CarUserControl mountedVehicle;
+        bool weaponAiming = false;
+        float weaponHeadTilt = 0;
+
+        
 
         Tween<LinearTweenPolicy> headTilt = new Tween<LinearTweenPolicy>();
 
         void Awake()
         {
-            anim = GetComponentInChildren<Animator>();
-            shooting = GetComponentInChildren<PlayerShooting>();
-            character = GetComponent<CharacterController>();
+            anim = playerPawn.GetComponentInChildren<Animator>();
+            shooting = playerPawn.GetComponentInChildren<PlayerShooting>();
+            character = playerPawn.GetComponent<CharacterController>();
+            Possess(playerPawn);
         }
         
+        void Possess(GameObject pawn)
+        {
+            cameraFollow.target = pawn.transform;
+        }
+
         void OnWeaponAimStart()
         {
-            headTilt.Init(headTilt.Value, -0.9f, headTiltTime, TweenMode.EaseIn);
+            headTilt.Init(headTilt.Value, weaponHeadTilt, headTiltTime, TweenMode.EaseIn);
         }
         void OnWeaponAimStop()
         {
@@ -41,9 +54,76 @@ namespace ZombieStory
             SetWeapon(startWeapon);
         }
 
+        void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.LeftControl))
+            {
+                ChangeToNextWeapon();
+            }
+
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                if (mountedVehicle != null)
+                {
+                    ExitVehicle();
+                } else
+                {
+                    EnterNearestVehicle();
+                }
+            }
+        }
+
+        void EnterNearestVehicle()
+        {
+            var vehicle = GameUtils.GetNearestObjectWithTag(playerPawn.transform.position, GameTags.Vehicle);
+            if (vehicle == null) return;
+
+            var distanceToVehicle = (playerPawn.transform.position - vehicle.transform.position).magnitude;
+            if (distanceToVehicle > maxVehicleMountDistance)
+            {
+                // nearest vehicle is too far to mount
+                return;
+            }
+
+            // Enter the vehicle
+            mountedVehicle = vehicle.GetComponent<CarUserControl>();
+            if (mountedVehicle == null) return;
+
+            mountedVehicle.enabled = true;
+            mountedVehicle.mounted = true;
+            playerPawn.gameObject.SetActive(false);
+            Possess(mountedVehicle.gameObject);
+            cameraFollow.zoomFactor = 2.0f;
+        } 
+
+        void ExitVehicle()
+        {
+            mountedVehicle.mounted = false;
+            // Place the player next to the vehicle
+            Transform vehicleTransform = mountedVehicle.gameObject.transform;
+            var newPlayerPosition = vehicleTransform.position + vehicleTransform.rotation * new Vector3(2, 0.25f, 0);
+
+            playerPawn.gameObject.transform.position = newPlayerPosition;
+            playerPawn.gameObject.SetActive(true);
+            Possess(playerPawn);
+            cameraFollow.zoomFactor = 1.0f;
+            mountedVehicle = null;
+        }
+
+
+        void ChangeToNextWeapon()
+        {
+            SetWeapon(weaponRegistry.GetNextWeapon(currentWeapon));
+        }
+
         void SetWeapon(string weaponId)
         {
             var item = weaponRegistry.GetWeapon(weaponId);
+            SetWeapon(item);
+        }
+
+        void SetWeapon(WeaponItem item)
+        {
             var sfx = weaponRegistry.GetWeaponSfx(item.sfxName);
 
             // Destroy the existing weapon
@@ -57,31 +137,19 @@ namespace ZombieStory
 
             currentWeapon = item;
 
-            if (item.roundsPerMinute == 0)
-            {
-                item.roundsPerMinute = 1;
-            }
+            var weaponAudio = weaponRegistry.GetWeaponSfx(currentWeapon.sfxName);
+            shooting.OnWeaponChanged(currentWeapon, weaponAudio);
 
-            shooting.timeBetweenBullets = 1.0f / item.roundsPerMinute;
-            //shooting.GunAudio.clip = sfx.sfx;
+            if (item.roundsPerSecond == 0)
+            {
+                item.roundsPerSecond = 1;
+            }
         }
 
         void FixedUpdate()
         {
-            {
-                bool isAimingNew = shooting.TimeSinceLastShot < timeToHoster;
-                if (weaponAiming != isAimingNew)
-                {
-                    weaponAiming = isAimingNew;
-                    if (weaponAiming)
-                    {
-                        OnWeaponAimStart();
-                    } else
-                    {
-                        OnWeaponAimStop();
-                    }
-                }
-            }
+            bool oldAimingState = weaponAiming;
+            weaponAiming = shooting.TimeSinceLastShot < timeToHoster;
             headTilt.Update(Time.fixedDeltaTime);
 
             int weaponAnimationId = weaponAiming ? currentWeapon.animationIndex : 0;
@@ -101,7 +169,20 @@ namespace ZombieStory
             SetupBodyOrientation(speed);
             SetupHeadTilt();
 
-            bool fullAuto = true;
+            // Notify if the weapon aim state has changed
+            if (weaponAiming != oldAimingState)
+            {
+                if (weaponAiming)
+                {
+                    OnWeaponAimStart();
+                }
+                else
+                {
+                    OnWeaponAimStop();
+                }
+            }
+            
+            bool fullAuto = currentWeapon.fullAuto;
             anim.SetBool("Shoot_b", shooting.IsShooting);
             anim.SetBool("FullAuto_b", fullAuto);
         }
@@ -158,40 +239,32 @@ namespace ZombieStory
 
             anim.SetFloat("Body_Horizontal_f", bodyH);
             anim.SetFloat("Body_Vertical_f", bodyV);
-
-            //float maxHeadTiltH = -0.9f;
-            //float targetheadTilt = bodyH / 0.6f * maxHeadTiltH;
-
-
         }
 
         public void SetupHeadTilt()
         {
-            float headH = 0;
-
             if (weaponAiming)
             {
                 int weaponIndex = currentWeapon.animationIndex;
                 if (weaponIndex == (int)WeaponCategory.NoWeapon)
                 {
-                    headH = 0;
+                    weaponHeadTilt = 0;
                 }
                 else if (weaponIndex == (int)WeaponCategory.Pistol)
                 {
-                    headH = -0.3f;
+                    weaponHeadTilt = -0.3f;
                 }
                 else if (weaponIndex == (int)WeaponCategory.Grenades)
                 {
-                    headH = 0;
+                    weaponHeadTilt = 0;
                 }
                 else
                 {
-                    headH = -0.9f;
+                    weaponHeadTilt = -0.9f;
                 }
             }
 
             float currentTilt = headTilt.Value;
-            
             anim.SetFloat("Head_Horizontal_f", headTilt.Value);
         }
     }
